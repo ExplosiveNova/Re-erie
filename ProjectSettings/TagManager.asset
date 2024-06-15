@@ -6,17 +6,19 @@ TagManager:
   tags:
   - Ball
   - Hands
+  - CinemachineTarget
+  - Enemy
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - WhatIsGround
   - Water
   - UI
   - Player
   - Ball
-  - 
-  - 
+  - WhatIsWall
+  - Sound
   - 
   - 
   - 
