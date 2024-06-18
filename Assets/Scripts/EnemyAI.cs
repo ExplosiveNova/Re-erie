@@ -9,17 +9,27 @@ public class EnemyAI : MonoBehaviour
     public NavMeshAgent agent;
 
     public Transform player;
+    public Transform pointA;
+    public Transform pointB;
+
 
     private Transform sonarSound;
+    private Transform currentDestination;
+    public float waitTime = 10f;
+    private float waitTimer;
 
     public LayerMask whatIsGround, whatIsPlayer, sound, whatIsObstacle;
 
     public float health;
 
-    //Patroling
+    //Roam
     public Vector3 walkPoint;
     bool walkPointSet;
     public float walkPointRange;
+
+    //Patrolling
+    public bool betweenPoints = false;
+    
 
     //Attacking
     public float timeBetweenAttacks;
@@ -41,7 +51,8 @@ public class EnemyAI : MonoBehaviour
     {
         player = GameObject.Find("PlayerCapsule").transform;
         agent = GetComponent<NavMeshAgent>();
-        
+        currentDestination = pointA;
+        waitTimer = 0f; // Initialize the wait timer
     }
 
     private void FixedUpdate()
@@ -63,19 +74,41 @@ public class EnemyAI : MonoBehaviour
 
         Debug.Log("SoundInRange:" + soundInRange);
 
-        if (!playerInSightRange && !playerInAttackRange && !soundInRange) Patroling();
+        if (!HasLineOfSightToPlayer() && !playerInAttackRange && !soundInRange)
+        {
+            if (playerInSightRange) agent.speed = 2f;
+            else agent.speed = 4f;
+
+            if (betweenPoints)
+            {
+                MoveBetweenPoints();
+            }
+            else
+            {
+                Patroling();
+            }
+            
+        }
         
         if (playerInSightRange && !playerInAttackRange) ChasePlayer();
 
         if (!onSight && soundInRange) ChaseSound();
 
         if (playerInAttackRange && playerInSightRange) AttackPlayer();
-        
+
        
+
     }
 
 
-
+    private void SwitchDestination()
+    {
+        if (currentDestination == pointA)
+            currentDestination = pointB;
+        else
+            currentDestination = pointA;
+        Debug.Log("Switching destination to: " + currentDestination.name);
+    }
     private void Patroling()
     {
         if (!walkPointSet) SearchWalkPoint();
@@ -101,13 +134,46 @@ public class EnemyAI : MonoBehaviour
             walkPointSet = true;
     }
 
-    private void GoToSpot()
+    private void MoveBetweenPoints()
     {
-        //TO DO
-        //agent.SetDestination();
+        Debug.Log("aaaaaaaaaa");
+        if (currentDestination == null)
+        {
+            Debug.Log("wtf");
+            return;
+            
+        }
+            
+
+
+        Debug.Log(currentDestination);
+        agent.SetDestination(currentDestination.position);
+
+        
+        if (Vector3.Distance(transform.position, currentDestination.position) <= agent.stoppingDistance)
+        {
+            // Reached the destination point
+            if (!agent.hasPath || agent.velocity.sqrMagnitude == 0f)
+            {
+                if (waitTimer <= 0f)
+                {
+                    waitTimer = waitTime; // Reset the wait timer
+                    SwitchDestination();  // Switch to the next destination
+                }
+                else
+                {
+                    waitTimer -= Time.deltaTime; // Count down the wait timer
+                    agent.SetDestination(transform.position); // Stop moving during the wait
+                }
+            }
+        } 
     }
+
+
     private void ChasePlayer()
     {
+
+        agent.speed = 3.5f;
 
        if (onSight)
         {
@@ -119,6 +185,7 @@ public class EnemyAI : MonoBehaviour
 
     private void ChaseSound()
     {
+        agent.speed = 4f;
         agent.SetDestination(sonarSound.position);
     }
 
@@ -132,10 +199,18 @@ public class EnemyAI : MonoBehaviour
         if (!alreadyAttacked)
         {
             ///Attack code here
-            Rigidbody rb = Instantiate(projectile, transform.position, Quaternion.identity).GetComponent<Rigidbody>();
-            rb.AddForce(transform.forward * 32f, ForceMode.Impulse);
-            rb.AddForce(transform.up * 8f, ForceMode.Impulse);
+            //Rigidbody rb = Instantiate(projectile, transform.position, Quaternion.identity).GetComponent<Rigidbody>();
+            //rb.AddForce(transform.forward * 32f, ForceMode.Impulse);
+            //rb.AddForce(transform.up * 8f, ForceMode.Impulse);
             ///End of attack code
+            ///
+
+            // Damage the player
+            PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
+            if (playerHealth != null)
+            {
+                playerHealth.TakeDamage(20f); // Specify the damage amount
+            }
 
             alreadyAttacked = true;
             Invoke(nameof(ResetAttack), timeBetweenAttacks);
