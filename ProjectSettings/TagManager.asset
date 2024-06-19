@@ -4,21 +4,24 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - Ball
-  - Hands
-  - CinemachineTarget
   - Enemy
+  - CinemachineTarget
+  - BatteryText
+  - Ball
+  - Battery
+  - SpawnPlayers
+  - BatteryHandler
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - WhatIsGround
+  - player
   - Water
   - UI
-  - Player
-  - Ball
-  - WhatIsWall
-  - Sound
+  - ground
+  - sound
+  - 
+  - 
   - 
   - 
   - 

@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2283237439466862529}
   - component: {fileID: 1550407332795936793}
   - component: {fileID: 2640098210576608759}
-  m_Layer: 9
+  m_Layer: 7
   m_Name: SonarSound
   m_TagString: Untagged
   m_Icon: {fileID: 0}

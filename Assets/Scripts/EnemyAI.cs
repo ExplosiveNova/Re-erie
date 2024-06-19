@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
+using Photon.Pun;
 
-public class EnemyAI : MonoBehaviour
+public class EnemyAI : MonoBehaviourPunCallbacks
 {
     public NavMeshAgent agent;
 
-    public Transform player;
     public Transform pointA;
     public Transform pointB;
-
+    public Animator animator;
 
     private Transform sonarSound;
     private Transform currentDestination;
@@ -42,64 +42,190 @@ public class EnemyAI : MonoBehaviour
 
     public bool onSight = false;
     private SonarSoundSpawn sonarSoundSpawn;
+    private Transform player;
+    private bool fetchPlayer1 = false;
+    private bool isWalking = true;
+    private bool isAttacking = false;
+
+
+    private SpawnPlayers spawnPlayers;
+
+    public AudioSource audioSource;
+    public AudioClip[] footstepClips;
+    public float footstepInterval = 0.5f; // Time between footstep sounds
+    private float footstepTimer;
+
+    public AudioSource attackAudioSource; // Separate AudioSource for attack sounds
+    public AudioSource idleAudioSource;   // Separate AudioSource for idle sounds
+    public AudioClip attackSound;         // Audio clip for attack sound
+    public AudioClip[] idleSounds;        // Array of idle sounds
+
+    private float idleSoundTimer;         // Timer for playing idle sounds
+    private float idleSoundInterval = 5f; // Interval between idle sounds in seconds
+
+
+
+private PlayerAudioManager playerAudioManager;
 
     private void Start()
-    {
-        sonarSoundSpawn = player.gameObject.GetComponent<SonarSoundSpawn>();
+    {   
+        
+        spawnPlayers = GameObject.Find("SpawnPlayers").GetComponent<SpawnPlayers>();
+        isWalking = true;
+
+        footstepTimer = footstepInterval;
+        idleSoundTimer = idleSoundInterval;
+        
     }
     private void Awake()
     {
-        player = GameObject.Find("PlayerCapsule").transform;
         agent = GetComponent<NavMeshAgent>();
         currentDestination = pointA;
         waitTimer = 0f; // Initialize the wait timer
+
+        audioSource = GetComponent<AudioSource>();
     }
 
     private void FixedUpdate()
-    {
-        onSight = HasLineOfSightToPlayer();
+    {   
+        if (spawnPlayers.player1Join){
+            onSight = HasLineOfSightToPlayer();
+            Debug.Log("On sight activated!" + onSight);
+        }
     }
+
+    private void OnEnteredRoom(){
+        player = GameObject.FindWithTag("Player").transform;
+        Debug.Log("found player transform!");
+        sonarSoundSpawn = player.gameObject.GetComponent<SonarSoundSpawn>();
+        playerAudioManager = player.gameObject.GetComponent<PlayerAudioManager>(); 
+    }
+
 
     private void Update()
-    {
-        
-        //Check for sight and attack range
-        playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
-        playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
+    {   
 
-        
-        if (GameObject.Find("SonarSound(Clone)")) sonarSound = GameObject.Find("SonarSound(Clone)").transform;
-            
-        soundInRange = Physics.CheckSphere(transform.position, hearingRange, sound);
-
-        Debug.Log("SoundInRange:" + soundInRange);
-
-        if (!HasLineOfSightToPlayer() && !playerInAttackRange && !soundInRange)
-        {
-            if (playerInSightRange) agent.speed = 2f;
-            else agent.speed = 4f;
-
-            if (betweenPoints)
-            {
-                MoveBetweenPoints();
+        if (spawnPlayers.player1Join){
+            if(!fetchPlayer1){
+                OnEnteredRoom();
+                fetchPlayer1 = true;
             }
-            else
+
+            Debug.Log("eles andem aí");
+            //Check for sight and attack range
+            playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
+            playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
+
+            
+            if (GameObject.Find("SonarSound(Clone)")) sonarSound = GameObject.Find("SonarSound(Clone)").transform;
+                
+            soundInRange = Physics.CheckSphere(transform.position, hearingRange, sound);
+
+            Debug.Log("SoundInRange:" + soundInRange);
+
+            if (playerInSightRange && !playerInAttackRange) {
+                ChasePlayer();
+                switchAnimation();
+            }
+
+            if (!playerInSightRange && soundInRange) ChaseSound();
+
+            if (playerInAttackRange && playerInSightRange){
+                AttackPlayer();
+                switchAnimation();
+            }
+
+            if (!playerInSightRange && !playerInAttackRange && !soundInRange)
             {
-                Patroling();
+                if (playerInSightRange) agent.speed = 2f;
+                else agent.speed = 4f;
+
+                if (betweenPoints)
+                {
+                    MoveBetweenPoints();
+                }
+                else
+                {   
+                    Debug.Log("Is patrolling!");
+                    Patroling();
+                    PlayIdleSound();
+                    switchAnimation();
+                }
+                
+            }
+
+            else{
+                idleSoundTimer = idleSoundInterval;
             }
             
-        }
-        
-        if (playerInSightRange && !playerInAttackRange) ChasePlayer();
+       }
 
-        if (!onSight && soundInRange) ChaseSound();
-
-        if (playerInAttackRange && playerInSightRange) AttackPlayer();
-
-       
+       ManageFootstepSounds();
 
     }
 
+    //METODOS SOM
+
+    private void ManageFootstepSounds()
+    {
+        // Check if the agent is moving
+        if (agent.velocity.sqrMagnitude > 0.1f && agent.remainingDistance > agent.stoppingDistance)
+        {
+            footstepTimer -= Time.deltaTime;
+            if (footstepTimer <= 0)
+            {
+                PlayFootstepSound();
+                footstepTimer = footstepInterval; // Reset timer
+            }
+        }
+        else
+        {
+            footstepTimer = footstepInterval; // Reset timer if not moving
+        }
+    }
+
+    private void PlayIdleSound()
+    {
+        // Countdown the idle sound timer
+        idleSoundTimer -= Time.deltaTime;
+
+        if (idleSoundTimer <= 0)
+        {
+            // Play a random idle sound if available
+            if (idleSounds.Length > 0 && idleAudioSource != null)
+            {
+                int randomIndex = Random.Range(0, idleSounds.Length);
+                idleAudioSource.PlayOneShot(idleSounds[randomIndex]);
+            }
+
+            // Reset the idle sound timer with a random interval to add variety
+            idleSoundTimer = Random.Range(idleSoundInterval / 2, idleSoundInterval * 1.5f);
+        }
+    }
+
+    private void PlayFootstepSound()
+    {
+        if (footstepClips.Length > 0)
+        {
+            int clipIndex = Random.Range(0, footstepClips.Length);
+            audioSource.PlayOneShot(footstepClips[clipIndex]);
+        }
+    }
+
+    private void switchAnimation(){
+
+        if (isWalking && !isAttacking){ //walking
+            animator.SetBool("isWalking", true);
+        }
+
+        if (!isWalking && !isAttacking ){ //chasing player
+            animator.SetBool("isWalking", false);
+        }
+
+        else { // attacking
+            animator.SetBool("isAttacking", true);
+        }
+    }
 
     private void SwitchDestination()
     {
@@ -110,7 +236,10 @@ public class EnemyAI : MonoBehaviour
         Debug.Log("Switching destination to: " + currentDestination.name);
     }
     private void Patroling()
-    {
+    {   
+        isAttacking = false;
+        isWalking = true;
+
         if (!walkPointSet) SearchWalkPoint();
 
         if (walkPointSet)
@@ -136,7 +265,6 @@ public class EnemyAI : MonoBehaviour
 
     private void MoveBetweenPoints()
     {
-        Debug.Log("aaaaaaaaaa");
         if (currentDestination == null)
         {
             Debug.Log("wtf");
@@ -172,11 +300,18 @@ public class EnemyAI : MonoBehaviour
 
     private void ChasePlayer()
     {
+        Debug.Log("is chasing player");
+        agent.speed = 4.5f;
 
-        agent.speed = 3.5f;
-
-       if (onSight)
+        if (playerAudioManager != null)
         {
+            playerAudioManager.PlayChasePlayerMusic();
+        }
+
+        if (playerInSightRange)
+        {   
+            isWalking = false; // is Chasing/ Running
+            isAttacking = false;
             agent.SetDestination(player.position);
             sonarSoundSpawn.DestroySonar();
         }
@@ -184,7 +319,12 @@ public class EnemyAI : MonoBehaviour
     }
 
     private void ChaseSound()
-    {
+    {   
+        if (playerAudioManager != null)
+        {
+            playerAudioManager.PlayNormalMusic();
+        }
+
         agent.speed = 4f;
         agent.SetDestination(sonarSound.position);
     }
@@ -193,18 +333,17 @@ public class EnemyAI : MonoBehaviour
     {
         //Make sure enemy doesn't move
         agent.SetDestination(transform.position);
-
         transform.LookAt(player);
 
         if (!alreadyAttacked)
         {
-            ///Attack code here
-            //Rigidbody rb = Instantiate(projectile, transform.position, Quaternion.identity).GetComponent<Rigidbody>();
-            //rb.AddForce(transform.forward * 32f, ForceMode.Impulse);
-            //rb.AddForce(transform.up * 8f, ForceMode.Impulse);
-            ///End of attack code
-            ///
+            if (attackAudioSource != null && attackSound != null)
+            {
+                attackAudioSource.PlayOneShot(attackSound);
+            }
 
+            isAttacking = true;
+            isWalking = false;
             // Damage the player
             PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
             if (playerHealth != null)
@@ -244,7 +383,7 @@ public class EnemyAI : MonoBehaviour
 
     private bool HasLineOfSightToPlayer()
     {
-        
+        Debug.Log("Line of sight to player!");
         RaycastHit hit;
         Vector3 directionToPlayer = (player.position - transform.position).normalized;
         // Adjust the raycast start position to the enemy's eye level or a suitable point

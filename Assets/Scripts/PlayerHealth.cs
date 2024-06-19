@@ -6,11 +6,15 @@ public class PlayerHealth : MonoBehaviour
 {
     public float maxHealth = 2f;
     private float currentHealth;
+    private SpawnPlayers spawnPlayers;
+    private BatteryHandler batteryHandler;
 
     public Transform resetPosition; // The position to reset the player to
 
     void Start()
-    {
+    {   
+        spawnPlayers = GameObject.FindGameObjectWithTag("SpawnPlayers").GetComponent<SpawnPlayers>();
+        batteryHandler = GameObject.FindGameObjectWithTag("BatteryHandler").GetComponent<BatteryHandler>();
         currentHealth = maxHealth;
     }
 
@@ -20,7 +24,8 @@ public class PlayerHealth : MonoBehaviour
         Debug.Log($"Player took {damage} damage. Current health: {currentHealth}");
 
         if (currentHealth <= 0)
-        {
+        {   
+            Debug.Log("Morri");
             ResetPlayerPosition();
         }
     }
@@ -28,8 +33,8 @@ public class PlayerHealth : MonoBehaviour
     private void ResetPlayerPosition()
     {
         currentHealth = maxHealth; // Reset health to max
-        transform.position = resetPosition.position; // Relocate player
-        transform.rotation = resetPosition.rotation; // Reset player rotation if needed
+        spawnPlayers.Respawn();
+        batteryHandler.Reset();
         Debug.Log("Player position reset.");
     }
 
